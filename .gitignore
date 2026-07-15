@@ -21,3 +21,6 @@ packages/engine-c/build/
 .idea/
 .vscode/
 *.swp
+
+# course materials (local only)
+课设要求/
