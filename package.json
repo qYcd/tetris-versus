@@ -13,15 +13,19 @@
     "build:shared": "npm run build -w @tetris/shared",
     "build:server": "npm run build -w @tetris/server",
     "build:client": "npm run build -w @tetris/client",
-    "build": "npm run build:shared && npm run build:server && npm run build:client",
+    "build": "npm run build:shared && npm run rebuild:engine && npm run build:server && npm run build:client",
     "dev:server": "npm run dev -w @tetris/server",
     "dev:client": "npm run dev -w @tetris/client",
     "start:server": "npm run start -w @tetris/server",
     "start:client": "npm run start -w @tetris/client",
-    "typecheck": "npm run typecheck -w @tetris/shared && npm run typecheck -w @tetris/server && npm run typecheck -w @tetris/client",
+    "typecheck": "npm run build:shared && npm run typecheck -w @tetris/shared && npm run typecheck -w @tetris/server && npm run typecheck -w @tetris/client",
     "dev:client:web": "npm run dev:web -w @tetris/client",
     "build:engine": "npm run rebuild -w @tetris/engine-c",
-    "rebuild:engine": "npm run rebuild -w @tetris/engine-c"
+    "rebuild:engine": "npm run rebuild -w @tetris/engine-c",
+    "release:win": "npm run build:client && ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npm run dist:win -w @tetris/client",
+    "release:win:portable": "npm run build:client && ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npm run dist:win:portable -w @tetris/client",
+    "release:mac": "npm run build:client && npm run dist:mac -w @tetris/client",
+    "postinstall": "npm run build -w @tetris/shared"
   },
   "engines": {
     "node": ">=18"

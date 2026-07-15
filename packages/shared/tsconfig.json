@@ -4,7 +4,13 @@
     "outDir": "dist",
     "rootDir": "src",
     "composite": true,
-    "lib": ["ES2022"]
+    "declaration": true,
+    "declarationMap": true,
+    "lib": [
+      "ES2022"
+    ]
   },
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*"
+  ]
 }

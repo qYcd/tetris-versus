@@ -12,7 +12,11 @@
     "start": "electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win --x64",
+    "dist:win:portable": "npm run build && electron-builder --win portable --x64",
+    "dist:all": "npm run build && electron-builder --mac --win --x64"
   },
   "dependencies": {
     "@tetris/shared": "0.1.0",
@@ -24,35 +28,65 @@
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^4.4.1",
     "concurrently": "^9.1.2",
-    "electron": "^35.1.5",
+    "electron": "35.7.5",
     "electron-builder": "^26.0.12",
     "typescript": "^5.8.3",
     "vite": "^6.3.2",
     "wait-on": "^8.0.3"
   },
   "build": {
-    "appId": "com.tetris.versus",
+    "appId": "com.qycd.tetrisversus",
     "productName": "Tetris Versus",
+    "copyright": "Copyright © 2026 qYcd",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build-resources"
     },
     "files": [
       "dist/**/*",
       "electron/**/*",
       "package.json"
     ],
+    "extraMetadata": {
+      "main": "electron/main.cjs"
+    },
     "mac": {
       "target": [
         "dmg",
         "zip"
       ],
-      "category": "public.app-category.games"
+      "category": "public.app-category.games",
+      "identity": null
     },
     "win": {
       "target": [
-        "nsis",
-        "portable"
-      ]
-    }
-  }
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-${version}-win-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Tetris Versus"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.exe"
+    },
+    "electronVersion": "35.7.5"
+  },
+  "description": "双人对战俄罗斯方块客户端（Electron）",
+  "author": "qYcd"
 }
