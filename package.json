@@ -1,0 +1,29 @@
+{
+  "name": "tetris-versus",
+  "version": "0.1.0",
+  "private": true,
+  "description": "双人对战俄罗斯方块（共享引擎 + WebSocket 服务端 + Electron 客户端）",
+  "workspaces": [
+    "packages/engine-c",
+    "packages/shared",
+    "packages/server",
+    "packages/client"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w @tetris/shared",
+    "build:server": "npm run build -w @tetris/server",
+    "build:client": "npm run build -w @tetris/client",
+    "build": "npm run build:shared && npm run build:server && npm run build:client",
+    "dev:server": "npm run dev -w @tetris/server",
+    "dev:client": "npm run dev -w @tetris/client",
+    "start:server": "npm run start -w @tetris/server",
+    "start:client": "npm run start -w @tetris/client",
+    "typecheck": "npm run typecheck -w @tetris/shared && npm run typecheck -w @tetris/server && npm run typecheck -w @tetris/client",
+    "dev:client:web": "npm run dev:web -w @tetris/client",
+    "build:engine": "npm run rebuild -w @tetris/engine-c",
+    "rebuild:engine": "npm run rebuild -w @tetris/engine-c"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
