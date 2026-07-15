@@ -18,7 +18,8 @@
 - [x] C 引擎冒烟测试
 - [x] 本机启动 server + 双连接联调
 - [x] 客户端 Vite 构建验证
-- [ ] git 仓库初始化并推 GitHub（未做，除非你要求）
+- [x] git 仓库初始化并首次提交
+- [ ] 推送到 GitHub（待创建远程仓库）
 
 ## Review（2026-07-15 实测）
 ```
@@ -31,3 +32,7 @@ ALL_TESTS_PASSED
 ```
 - 服务端日志确认：`authoritative rules engine = C`
 - 双人 join/ready/countdown/playing、左移、硬降、状态同步均通过
+
+### Git
+- 本地仓库已初始化，分支 main，首提 77d24c4
+- 远程尚未配置，待 `gh repo create` 或手动添加 origin 后 push
