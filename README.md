@@ -1,6 +1,6 @@
 # Tetris Versus
 
-双人对战俄罗斯方块：**一个安装包**即可当房主、加入房间或单人练习。  
+双人对战俄罗斯方块：**一个安装包**实现当房主、加入房间或单人练习。  
 核心规则引擎用 **C 语言**实现，界面与联网为 Electron + WebSocket。
 
 仓库：https://github.com/qYcd/tetris-versus  
