@@ -4,11 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx src/index.ts",
+    "dev": "node ../../node_modules/tsx/dist/cli.mjs src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "prebuild": "npm run build -w @tetris/shared"
+    "prebuild": "npm run build -w @tetris/shared",
+    "dev:tsx": "tsx src/index.ts"
   },
   "dependencies": {
     "@tetris/shared": "0.1.0",

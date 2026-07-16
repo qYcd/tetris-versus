@@ -74,6 +74,29 @@ setInterval(() => {
   manager.tickAll(config.tickMs);
 }, config.tickMs);
 
+httpServer.on('error', (err: NodeJS.ErrnoException) => {
+  // 启动失败时给出可操作提示（最常见是端口占用）
+  if (err.code === 'EADDRINUSE') {
+    console.error(
+      `[server] 端口 ${config.port} 已被占用（EADDRINUSE）。`,
+    );
+    console.error(
+      `[server] 处理方式：
+` +
+        `  1) 若已有服务在跑，可直接使用，不必重复启动
+` +
+        `  2) 查看占用：lsof -nP -iTCP:${config.port} -sTCP:LISTEN
+` +
+        `  3) 结束旧进程：kill <PID>
+` +
+        `  4) 或换端口：PORT=8788 npm run dev:server`,
+    );
+    process.exit(1);
+  }
+  console.error('[server] 启动失败:', err);
+  process.exit(1);
+});
+
 httpServer.listen(config.port, config.host, () => {
   // 服务启动日志
   console.log(

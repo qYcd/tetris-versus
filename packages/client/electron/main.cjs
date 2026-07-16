@@ -1,9 +1,19 @@
 /**
  * Electron 主进程：创建跨平台应用窗口，加载 Vite 开发服或打包后的页面。
  */
-const { app, BrowserWindow, shell } = require('electron');
+const electron = require('electron');
 const path = require('path');
 
+// 若被 Node 直接执行，require('electron') 会返回二进制路径字符串
+if (typeof electron === 'string' || !electron.app) {
+  console.error(
+    '[electron] 主进程启动异常：请使用 Electron 运行，而不是 node。\n' +
+      '正确命令：npm run dev:client  或  npx electron .',
+  );
+  process.exit(1);
+}
+
+const { app, BrowserWindow, shell } = electron;
 const isDev = !app.isPackaged;
 
 /**
