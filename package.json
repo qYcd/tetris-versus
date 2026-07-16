@@ -25,7 +25,17 @@
     "release:win": "npm run build:client && ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npm run dist:win -w @tetris/client",
     "release:win:portable": "npm run build:client && ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npm run dist:win:portable -w @tetris/client",
     "release:mac": "npm run build:client && npm run dist:mac -w @tetris/client",
-    "postinstall": "npm run build -w @tetris/shared"
+    "postinstall": "npm run build -w @tetris/shared",
+    "dist:host:mac": "npm run dist:host:mac -w @tetris/client",
+    "dist:host:win": "npm run dist:host:win -w @tetris/client",
+    "dist:client:mac": "npm run dist:client:mac -w @tetris/client",
+    "dist:client:win": "npm run dist:client:win -w @tetris/client",
+    "dist:apps:mac": "npm run dist:apps:mac -w @tetris/client",
+    "dist:apps:win": "npm run dist:apps:win -w @tetris/client",
+    "dist:apps:all": "npm run dist:apps:all -w @tetris/client",
+    "dist:mac": "npm run dist:mac -w @tetris/client",
+    "dist:win": "npm run dist:win -w @tetris/client",
+    "dist:all": "npm run dist:all -w @tetris/client"
   },
   "engines": {
     "node": ">=18"

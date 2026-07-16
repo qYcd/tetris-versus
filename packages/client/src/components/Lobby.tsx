@@ -1,86 +1,182 @@
 /**
- * 大厅：填写昵称、服务器地址、房间号，发起匹配/加入。
+ * 统一大厅：
+ * 1) 当房主开房
+ * 2) 加入房间
+ * 3) 单人练习
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+export type PlayMode = 'menu' | 'host' | 'join' | 'solo';
 
 interface Props {
   connecting: boolean;
   error: string;
+  bootstrap?: TetrisBootstrap | null;
+  onRefreshBootstrap?: () => Promise<void> | void;
+  onStartHost: (name: string, roomId?: string) => Promise<void> | void;
   onJoin: (serverUrl: string, name: string, roomId?: string) => void;
+  onSolo: (name: string) => void;
 }
 
 /**
- * 默认 WebSocket 地址（本机服务端）。
+ * 统一入口大厅。
  */
-function defaultServerUrl(): string {
-  // Electron/Web 统一默认连本机权威服务
-  return 'ws://127.0.0.1:8787';
-}
-
-/**
- * 对战大厅表单。
- */
-export function Lobby({ connecting, error, onJoin }: Props) {
+export function Lobby({
+  connecting,
+  error,
+  bootstrap,
+  onRefreshBootstrap,
+  onStartHost,
+  onJoin,
+  onSolo,
+}: Props) {
+  const [mode, setMode] = useState<PlayMode>('menu');
   const [name, setName] = useState(() => `玩家${Math.floor(Math.random() * 90 + 10)}`);
-  const [serverUrl, setServerUrl] = useState(defaultServerUrl);
+  const [serverUrl, setServerUrl] = useState('ws://192.168.1.8:8787');
   const [roomId, setRoomId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [localError, setLocalError] = useState('');
 
-  const canSubmit = useMemo(() => name.trim().length > 0 && serverUrl.trim().length > 0, [name, serverUrl]);
+  useEffect(() => {
+    if (bootstrap?.host?.lanWs) {
+      // 给加入模式一个合理默认，不强制覆盖用户输入
+      setServerUrl((prev) => (prev.includes('192.168.') ? prev : bootstrap.host.lanWs));
+    }
+  }, [bootstrap]);
+
+  const canSubmit = useMemo(() => name.trim().length > 0, [name]);
+
+  async function handleHost() {
+    if (!canSubmit || busy) return;
+    setBusy(true);
+    setLocalError('');
+    try {
+      await onStartHost(name.trim(), roomId.trim() || undefined);
+    } catch (e) {
+      setLocalError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="lobby">
       <h1>Tetris Versus</h1>
-      <p>
-        双人联网积分对战 · 核心规则由 C 引擎驱动 · 7-bag 洗牌 · 锁定后单格重力级联 · 一方顶出或 10 分钟比分决胜。
-        Electron 客户端可在 macOS / Windows 同时运行。
-      </p>
+      <p>一个安装包完成全部玩法：当房主、加入房间、单人练习。</p>
 
-      <div className="form-grid">
-        <label className="form-row">
-          <span>昵称</span>
-          <input value={name} maxLength={16} onChange={(e) => setName(e.target.value)} placeholder="你的名字" />
-        </label>
-        <label className="form-row">
-          <span>服务器 WebSocket</span>
-          <input
-            value={serverUrl}
-            onChange={(e) => setServerUrl(e.target.value)}
-            placeholder="ws://127.0.0.1:8787"
-          />
-        </label>
-        <label className="form-row">
-          <span>房间号（可空=自动匹配）</span>
-          <input
-            value={roomId}
-            onChange={(e) => setRoomId(e.target.value.toUpperCase())}
-            placeholder="例如 AB12CD"
-          />
-        </label>
-        <div className="form-actions">
-          <button
-            className="primary"
-            disabled={!canSubmit || connecting}
-            onClick={() => onJoin(serverUrl.trim(), name.trim(), roomId.trim() || undefined)}
-          >
-            {connecting ? '连接中…' : roomId.trim() ? '加入房间' : '快速匹配'}
-          </button>
+      {mode === 'menu' ? (
+        <div className="form-grid">
+          <label className="form-row">
+            <span>昵称</span>
+            <input value={name} maxLength={16} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <div className="form-actions" style={{ display: 'grid', gap: 10 }}>
+            <button className="primary" disabled={!canSubmit} onClick={() => setMode('host')}>
+              当房主开房（双人对战）
+            </button>
+            <button disabled={!canSubmit} onClick={() => setMode('join')}>
+              加入房间
+            </button>
+            <button disabled={!canSubmit} onClick={() => onSolo(name.trim())}>
+              单人练习
+            </button>
+          </div>
+          <div className="help-box">
+            <strong>推荐双人流程</strong>
+            <br />
+            1. A 选择“当房主开房”
+            <br />
+            2. 把显示的局域网地址发给 B
+            <br />
+            3. B 选择“加入房间”并填写该地址
+            <br />
+            4. 双方 Ready 开始
+          </div>
         </div>
-        {error ? <div className="banner danger">{error}</div> : null}
-      </div>
+      ) : null}
 
-      <div className="help-box">
-        <strong>操作（本机控制自己的盘面）</strong>
-        <br />
-        移动：← → 或 A D　旋转：↑ / W / X（顺） Z（逆）　软降：↓ / S
-        <br />
-        硬降：Space　Hold：C
-        <br />
-        <strong>规则要点</strong>
-        <br />
-        当前操控方块仍整体移动/旋转；锁定后固定格按列单格下落填补空隙，消行可连锁计分。
-        <br />
-        胜负：对方顶出即胜；满 10 分钟比分高者胜。
+      {mode === 'host' ? (
+        <div className="form-grid">
+          <div className="banner">
+            <div>
+              本机地址：<strong>{bootstrap?.host?.localWs || 'ws://127.0.0.1:8787'}</strong>
+            </div>
+            <div>
+              给对手的地址：<strong>{bootstrap?.host?.lanWs || '启动后显示'}</strong>
+            </div>
+            <div style={{ marginTop: 6, color: 'var(--muted)' }}>
+              服务状态：{bootstrap?.host?.running ? '已启动' : '点击下方后启动'}
+              {bootstrap?.host?.engineKind ? ` · 引擎 ${bootstrap.host.engineKind}` : ''}
+            </div>
+          </div>
+          <label className="form-row">
+            <span>昵称</span>
+            <input value={name} maxLength={16} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <label className="form-row">
+            <span>房间号（可空）</span>
+            <input
+              value={roomId}
+              onChange={(e) => setRoomId(e.target.value.toUpperCase())}
+              placeholder="例如 AB12CD"
+            />
+          </label>
+          <div className="form-actions">
+            <button className="primary" disabled={!canSubmit || busy || connecting} onClick={handleHost}>
+              {busy || connecting ? '启动中…' : '启动并进入房间'}
+            </button>
+            <button
+              onClick={async () => {
+                await onRefreshBootstrap?.();
+                setMode('menu');
+              }}
+            >
+              返回
+            </button>
+          </div>
+          {(localError || error) && <div className="banner danger">{localError || error}</div>}
+        </div>
+      ) : null}
+
+      {mode === 'join' ? (
+        <div className="form-grid">
+          <label className="form-row">
+            <span>昵称</span>
+            <input value={name} maxLength={16} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <label className="form-row">
+            <span>房主服务器地址</span>
+            <input
+              value={serverUrl}
+              onChange={(e) => setServerUrl(e.target.value)}
+              placeholder="ws://192.168.1.8:8787"
+            />
+          </label>
+          <label className="form-row">
+            <span>房间号（可空）</span>
+            <input
+              value={roomId}
+              onChange={(e) => setRoomId(e.target.value.toUpperCase())}
+              placeholder="例如 AB12CD"
+            />
+          </label>
+          <div className="form-actions">
+            <button
+              className="primary"
+              disabled={!canSubmit || !serverUrl.trim() || connecting}
+              onClick={() => onJoin(serverUrl.trim(), name.trim(), roomId.trim() || undefined)}
+            >
+              {connecting ? '连接中…' : '加入房间'}
+            </button>
+            <button onClick={() => setMode('menu')}>返回</button>
+          </div>
+          {error ? <div className="banner danger">{error}</div> : null}
+        </div>
+      ) : null}
+
+      <div className="help-box" style={{ marginTop: 18 }}>
+        操作：← → / A D 移动；↑ W X 顺时针；Z 逆时针；↓ S 软降；Space 硬降；C Hold
       </div>
     </div>
   );
