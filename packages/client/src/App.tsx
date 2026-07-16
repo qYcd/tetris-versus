@@ -96,13 +96,23 @@ export function App() {
       setRuntime('online');
       return;
     }
-    const info = await window.tetrisApp.startHost({ durationMs });
-    setBootstrap(info);
-    const wsUrl = info.host.localWs || 'ws://127.0.0.1:8787';
-    // 稍等服务起来
-    await new Promise((r) => setTimeout(r, 120));
-    socket.connectAndJoin(wsUrl, name, roomId);
-    setRuntime('online');
+    try {
+      const info = await window.tetrisApp.startHost({ durationMs });
+      setBootstrap(info);
+      const wsUrl = info.host.localWs || 'ws://127.0.0.1:8787';
+      // 稍等服务起来
+      await new Promise((r) => setTimeout(r, 120));
+      socket.connectAndJoin(wsUrl, name, roomId);
+      setRuntime('online');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // 开发态常见：旧主进程未重载，提示完整重启 Electron
+      throw new Error(
+        msg.includes('No handler registered')
+          ? '主进程未注册 startHost。请完全退出 Electron 后执行 npm run dev:client 重启。'
+          : msg,
+      );
+    }
   }
 
   function startSolo(name: string, durationMinutes = 10) {

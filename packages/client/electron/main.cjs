@@ -5,7 +5,6 @@
 const electron = require('electron');
 const path = require('path');
 const os = require('os');
-const fs = require('fs');
 
 if (typeof electron === 'string' || !electron.app) {
   console.error('[electron] 请使用 Electron 运行本应用（npm run dev:client / 安装包启动）');
@@ -13,7 +12,6 @@ if (typeof electron === 'string' || !electron.app) {
 }
 
 const { app, BrowserWindow, shell, ipcMain } = electron;
-const { startEmbeddedServer } = require('./server-host.cjs');
 
 const isDev = !app.isPackaged;
 const DEFAULT_PORT = Number(process.env.PORT || 8787);
@@ -22,6 +20,8 @@ const DEFAULT_PORT = Number(process.env.PORT || 8787);
 let mainWindow = null;
 /** @type {{ close: Function, port: number, engineKind: string, engineVersion: string } | null} */
 let embedded = null;
+/** IPC 是否已注册 */
+let ipcRegistered = false;
 
 /**
  * 获取局域网 IPv4。
@@ -36,6 +36,18 @@ function getLanIPv4() {
     }
   }
   return '127.0.0.1';
+}
+
+/**
+ * 延迟加载内嵌服务，避免主进程因 server-host 异常而无法注册 IPC。
+ */
+function loadStartEmbeddedServer() {
+  // eslint-disable-next-line global-require, import/no-dynamic-require
+  const mod = require('./server-host.cjs');
+  if (!mod || typeof mod.startEmbeddedServer !== 'function') {
+    throw new Error('server-host.cjs 未导出 startEmbeddedServer');
+  }
+  return mod.startEmbeddedServer;
 }
 
 /**
@@ -59,8 +71,6 @@ function createWindow() {
 
   if (isDev) {
     mainWindow.loadURL('http://127.0.0.1:5173');
-    // 开发时可选打开调试
-    // mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
   }
@@ -73,14 +83,12 @@ function createWindow() {
 
 /**
  * 按需启动内嵌服务端（房主模式）。
- */
-/**
- * 按需启动内嵌服务端（房主模式）。
  * @param {{ durationMs?: number }} [opts]
  */
 async function ensureHostServer(opts = {}) {
   if (embedded) return embedded;
   try {
+    const startEmbeddedServer = loadStartEmbeddedServer();
     embedded = await startEmbeddedServer({
       port: DEFAULT_PORT,
       host: '0.0.0.0',
@@ -98,10 +106,14 @@ async function ensureHostServer(opts = {}) {
       console.warn('[app] 端口占用，复用已有服务', DEFAULT_PORT);
       return embedded;
     }
+    console.error('[app] 启动内嵌服务失败:', err);
     throw err;
   }
 }
 
+/**
+ * 组装前端 bootstrap 信息。
+ */
 function buildBootstrap() {
   const lanIp = getLanIPv4();
   const port = embedded?.port || DEFAULT_PORT;
@@ -126,22 +138,44 @@ function buildBootstrap() {
   };
 }
 
-ipcMain.handle('tetris:getBootstrap', async () => buildBootstrap());
-
-ipcMain.handle('tetris:startHost', async (_evt, opts = {}) => {
-  await ensureHostServer({ durationMs: opts?.durationMs });
-  return buildBootstrap();
-});
-
-ipcMain.handle('tetris:stopHost', async () => {
-  if (embedded && typeof embedded.close === 'function') {
-    await embedded.close();
+/**
+ * 注册 IPC（可重复调用，先 remove 再 handle，避免热重载/重复 ready）。
+ */
+function registerIpcHandlers() {
+  const channels = ['tetris:getBootstrap', 'tetris:startHost', 'tetris:stopHost'];
+  for (const ch of channels) {
+    try {
+      ipcMain.removeHandler(ch);
+    } catch {
+      // ignore
+    }
   }
-  embedded = null;
-  return buildBootstrap();
-});
+
+  ipcMain.handle('tetris:getBootstrap', async () => buildBootstrap());
+
+  ipcMain.handle('tetris:startHost', async (_evt, opts = {}) => {
+    await ensureHostServer({ durationMs: opts && opts.durationMs });
+    return buildBootstrap();
+  });
+
+  ipcMain.handle('tetris:stopHost', async () => {
+    if (embedded && typeof embedded.close === 'function') {
+      await embedded.close();
+    }
+    embedded = null;
+    return buildBootstrap();
+  });
+
+  ipcRegistered = true;
+  console.log('[app] IPC handlers registered:', channels.join(', '));
+}
+
+// 尽早注册，防止渲染进程 ready 后立刻 invoke 时无 handler
+registerIpcHandlers();
 
 app.whenReady().then(() => {
+  // 再注册一次，确保 whenReady 后仍可用
+  if (!ipcRegistered) registerIpcHandlers();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
