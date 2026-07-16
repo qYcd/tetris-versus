@@ -305,6 +305,10 @@ async function startEmbeddedServer(options = {}) {
   });
 
   const wss = new WebSocketServer({ server: httpServer });
+  // ws 会把 server 的 error 再 emit 到自身；无监听时会变成 uncaughtException（EADDRINUSE）
+  wss.on('error', (err) => {
+    console.warn('[host-server] websocket server error:', err && err.code ? err.code : err);
+  });
   wss.on('connection', (ws) => {
     const session = {
       id: cryptoRandomId(),
@@ -361,10 +365,26 @@ async function startEmbeddedServer(options = {}) {
     }
   }, TICK_MS);
 
-  await new Promise((resolve, reject) => {
-    httpServer.once('error', reject);
-    httpServer.listen(port, host, () => resolve());
-  });
+  // 监听端口；失败时清理定时器/WebSocket，并把错误抛给调用方（含 EADDRINUSE）
+  try {
+    await new Promise((resolve, reject) => {
+      httpServer.once('error', reject);
+      httpServer.listen(port, host, () => resolve());
+    });
+  } catch (err) {
+    clearInterval(timer);
+    try {
+      wss.close();
+    } catch {
+      // ignore
+    }
+    try {
+      httpServer.close();
+    } catch {
+      // ignore
+    }
+    throw err;
+  }
 
   console.log(`[host-server] listening on ws://${host}:${port} engine=${engine.kind}`);
 
@@ -373,11 +393,35 @@ async function startEmbeddedServer(options = {}) {
     host,
     engineKind: engine.kind,
     engineVersion: engine.version,
+    /**
+     * 关闭内嵌服务并释放端口。
+     * 会主动断开所有 WebSocket，确保 httpServer.close 能完成。
+     */
     close: () =>
       new Promise((resolve) => {
         clearInterval(timer);
-        wss.close();
-        httpServer.close(() => resolve());
+        try {
+          for (const client of wss.clients) {
+            try {
+              client.terminate();
+            } catch {
+              // ignore
+            }
+          }
+        } catch {
+          // ignore
+        }
+        try {
+          wss.close();
+        } catch {
+          // ignore
+        }
+        httpServer.close(() => {
+          console.log(`[host-server] closed port ${port}`);
+          resolve();
+        });
+        // 兜底：极端情况下 close 回调未触发，避免 Promise 悬挂
+        setTimeout(() => resolve(), 1500).unref?.();
       }),
   };
 }

@@ -18,7 +18,7 @@ const DEFAULT_PORT = Number(process.env.PORT || 8787);
 
 /** @type {import('electron').BrowserWindow | null} */
 let mainWindow = null;
-/** @type {{ close: Function, port: number, engineKind: string, engineVersion: string } | null} */
+/** @type {{ close: Function, port: number, engineKind: string, engineVersion: string, owned?: boolean } | null} */
 let embedded = null;
 /** IPC 是否已注册 */
 let ipcRegistered = false;
@@ -82,11 +82,88 @@ function createWindow() {
 }
 
 /**
+ * 探测本机端口上是否已有可复用的对战服务。
+ * @param {number} port
+ * @returns {Promise<{ ok: boolean, engine?: string, version?: string }>}
+ */
+function probeLocalHostService(port) {
+  return new Promise((resolve) => {
+    const http = require('http');
+    const req = http.get(
+      {
+        host: '127.0.0.1',
+        port,
+        path: '/health',
+        timeout: 800,
+      },
+      (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          body += chunk;
+        });
+        res.on('end', () => {
+          try {
+            const data = JSON.parse(body || '{}');
+            if (data && data.ok) {
+              resolve({
+                ok: true,
+                engine: data.engine || data.service || 'external',
+                version: data.version || 'reused-port',
+              });
+              return;
+            }
+          } catch {
+            // ignore parse error
+          }
+          // 非 JSON 健康检查也视为可复用（独立 server 的 /health 也返回 ok）
+          if (res.statusCode === 200) {
+            resolve({ ok: true, engine: 'external', version: 'reused-port' });
+            return;
+          }
+          resolve({ ok: false });
+        });
+      },
+    );
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ ok: false });
+    });
+    req.on('error', () => resolve({ ok: false }));
+  });
+}
+
+/**
+ * 构造“复用已有端口服务”的 embedded 句柄（不负责关闭外部进程）。
+ * @param {number} port
+ * @param {{ engine?: string, version?: string }} [info]
+ */
+function makeReusedEmbedded(port, info = {}) {
+  return {
+    port,
+    engineKind: info.engine || 'external',
+    engineVersion: info.version || 'reused-port',
+    // 复用外部进程时不可关闭对方服务
+    owned: false,
+    close: async () => {},
+  };
+}
+
+/**
  * 按需启动内嵌服务端（房主模式）。
  * @param {{ durationMs?: number }} [opts]
  */
 async function ensureHostServer(opts = {}) {
   if (embedded) return embedded;
+
+  // 端口已有健康服务时直接复用，避免 listen 冲突弹窗
+  const probed = await probeLocalHostService(DEFAULT_PORT);
+  if (probed.ok) {
+    embedded = makeReusedEmbedded(DEFAULT_PORT, probed);
+    console.warn('[app] 检测到已有服务，复用端口', DEFAULT_PORT, probed);
+    return embedded;
+  }
+
   try {
     const startEmbeddedServer = loadStartEmbeddedServer();
     embedded = await startEmbeddedServer({
@@ -94,15 +171,14 @@ async function ensureHostServer(opts = {}) {
       host: '0.0.0.0',
       durationMs: opts.durationMs,
     });
+    // 本进程真正 listen 成功，离开房间时可关闭并释放端口
+    embedded.owned = true;
     return embedded;
   } catch (err) {
     if (err && err.code === 'EADDRINUSE') {
-      embedded = {
-        port: DEFAULT_PORT,
-        engineKind: 'external',
-        engineVersion: 'reused-port',
-        close: async () => {},
-      };
+      // 二次兜底：竞态下端口刚被占用，仍按复用处理
+      const again = await probeLocalHostService(DEFAULT_PORT);
+      embedded = makeReusedEmbedded(DEFAULT_PORT, again.ok ? again : {});
       console.warn('[app] 端口占用，复用已有服务', DEFAULT_PORT);
       return embedded;
     }
@@ -128,6 +204,7 @@ function buildBootstrap() {
     },
     host: {
       running: Boolean(embedded),
+      owned: Boolean(embedded?.owned),
       port,
       lanIp,
       localWs: `ws://127.0.0.1:${port}`,
@@ -159,8 +236,15 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('tetris:stopHost', async () => {
-    if (embedded && typeof embedded.close === 'function') {
-      await embedded.close();
+    // 仅关闭本进程自建的内嵌服务；复用外部 8787 时不杀对方进程
+    if (embedded && embedded.owned && typeof embedded.close === 'function') {
+      try {
+        await embedded.close();
+      } catch (err) {
+        console.error('[app] 关闭内嵌服务失败:', err);
+      }
+    } else if (embedded && !embedded.owned) {
+      console.warn('[app] 当前端口服务非本进程创建，stopHost 跳过关闭');
     }
     embedded = null;
     return buildBootstrap();
@@ -187,8 +271,13 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
-  if (embedded && typeof embedded.close === 'function') {
-    embedded.close();
-    embedded = null;
+  // 退出应用时释放自建端口，避免 8787 残留
+  if (embedded && embedded.owned && typeof embedded.close === 'function') {
+    try {
+      embedded.close();
+    } catch {
+      // ignore
+    }
   }
+  embedded = null;
 });

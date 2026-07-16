@@ -1,6 +1,6 @@
 {
   "name": "@tetris/server",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,9 +12,9 @@
     "dev:tsx": "tsx src/index.ts"
   },
   "dependencies": {
-    "@tetris/shared": "0.1.1",
+    "@tetris/shared": "0.1.2",
     "ws": "^8.18.1",
-    "@tetris/engine-c": "0.1.1"
+    "@tetris/engine-c": "0.1.2"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",

@@ -805,7 +805,7 @@ void te_match_forfeit(TeMatch *match, const char *player_id) {
 }
 
 const char *te_engine_version(void) {
-  return "tetris-engine-c/0.1.1";
+  return "tetris-engine-c/0.1.2";
 }
 
 int te_parse_action(const char *name) {

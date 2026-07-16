@@ -2,6 +2,8 @@
 
 interface TetrisHostInfo {
   running: boolean;
+  /** 是否为本进程自建内嵌服务（房主离开时应关闭） */
+  owned?: boolean;
   port: number;
   lanIp: string;
   localWs: string;

@@ -24,6 +24,8 @@ export function App() {
   const [runtime, setRuntime] = useState<RuntimeMode>('online');
   const [soloState, setSoloState] = useState<MatchState | null>(null);
   const soloRef = useRef<SoloController | null>(null);
+  /** 当前会话是否为本机房主（启动过内嵌服务） */
+  const [isRoomHost, setIsRoomHost] = useState(false);
 
   const refreshBootstrap = useCallback(async () => {
     if (!window.tetrisApp?.getBootstrap) return;
@@ -91,7 +93,8 @@ export function App() {
     const minutes = Math.min(60, Math.max(1, Math.floor(durationMinutes || 10)));
     const durationMs = minutes * 60 * 1000;
     if (!window.tetrisApp?.startHost) {
-      // 网页调试回退：假定本机已有服务
+      // 网页调试回退：假定本机已有服务（非自建，离开不关服）
+      setIsRoomHost(false);
       socket.connectAndJoin('ws://127.0.0.1:8787', name, roomId);
       setRuntime('online');
       return;
@@ -99,6 +102,8 @@ export function App() {
     try {
       const info = await window.tetrisApp.startHost({ durationMs });
       setBootstrap(info);
+      // 仅当本进程真正托管服务时，离开房间才关服释放端口
+      setIsRoomHost(Boolean(info.host?.owned ?? info.host?.running));
       const wsUrl = info.host.localWs || 'ws://127.0.0.1:8787';
       // 稍等服务起来
       await new Promise((r) => setTimeout(r, 120));
@@ -124,19 +129,41 @@ export function App() {
       onState: setSoloState,
     });
     soloRef.current = ctrl;
+    setIsRoomHost(false);
     setRuntime('solo');
     ctrl.start();
   }
 
-  function leaveAll() {
+  /**
+   * 离开当前模式：
+   * - 单人：停本地引擎
+   * - 联网：断开 WebSocket
+   * - 若本机是房主：关闭内嵌服务，释放 8787
+   * - 对手（加入方）离开：只断开自己，不影响房主服务
+   */
+  async function leaveAll() {
     if (runtime === 'solo') {
       soloRef.current?.stop();
       soloRef.current = null;
       setSoloState(null);
       setRuntime('online');
+      setIsRoomHost(false);
       return;
     }
+
+    // 先断开自己的对战连接
     socket.disconnect();
+
+    // 仅房主关服；加入端离开绝不 stopHost
+    if (isRoomHost && window.tetrisApp?.stopHost) {
+      try {
+        const info = await window.tetrisApp.stopHost();
+        setBootstrap(info);
+      } catch (err) {
+        console.error('[app] stopHost failed', err);
+      }
+    }
+    setIsRoomHost(false);
   }
 
   const statusText = (() => {
@@ -173,6 +200,8 @@ export function App() {
             onRefreshBootstrap={refreshBootstrap}
             onStartHost={startHost}
             onJoin={(url, name, roomId) => {
+              // 加入方不是房主，离开时不关服
+              setIsRoomHost(false);
               setRuntime('online');
               socket.connectAndJoin(url, name, roomId);
             }}
