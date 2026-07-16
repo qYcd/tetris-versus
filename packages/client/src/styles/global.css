@@ -346,3 +346,11 @@ input:focus {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+
+/* NEXT 三预览竖排 */
+.next-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

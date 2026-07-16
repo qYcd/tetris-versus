@@ -5,8 +5,9 @@
  *
  * 规则要点：
  * 1) 活动方块整体移动/旋转（含简化踢墙）
- * 2) 锁定后固定格执行“列内单格重力”，有空隙继续下落
- * 3) 消行后可再次重力，形成连锁计分
+ * 2) 锁定后仅当发生消行时，消行上方固定格才按列下落触底
+ * 3) 消行连锁：clear -> gravity -> clear ...
+ * 4) 活动块重力采用 Guideline 风格 log2 曲线（60fps 语义）
  * 4) 方块生成使用 7-bag 洗牌
  * 5) 胜负：一方顶出；或限时结束比分高者胜
  *
@@ -66,6 +67,7 @@ typedef enum {
   TE_PHASE_WAITING = 0,
   TE_PHASE_COUNTDOWN,
   TE_PHASE_PLAYING,
+  TE_PHASE_PAUSED,
   TE_PHASE_FINISHED
 } TeMatchPhase;
 
@@ -139,6 +141,9 @@ const char *te_match_add_player(TeMatch *match, const char *name);
 
 /** 玩家 Ready */
 void te_match_ready(TeMatch *match, const char *player_id);
+
+/** 切换暂停/继续（playing <-> paused，无次数上限） */
+void te_match_pause(TeMatch *match);
 
 /** 处理输入：pressed=1 按下，0 抬起（软降需要） */
 void te_match_input(TeMatch *match, const char *player_id, TeInputAction action, int pressed);

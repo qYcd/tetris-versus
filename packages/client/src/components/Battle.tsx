@@ -37,7 +37,9 @@ export function Battle({ state, selfId, info, onReady, onLeave }: Props) {
         ? `倒计时 ${state.countdown}`
         : state.phase === 'playing'
           ? '对战中'
-          : '已结束';
+          : state.phase === 'paused'
+            ? '已暂停'
+            : '已结束';
 
   const winnerName =
     state.winnerId == null
@@ -68,6 +70,11 @@ export function Battle({ state, selfId, info, onReady, onLeave }: Props) {
           {state.phase === 'countdown' ? (
             <div className="banner" style={{ marginTop: 12 }}>
               {state.countdown}
+            </div>
+          ) : null}
+          {state.phase === 'paused' ? (
+            <div className="overlay-msg">
+              <span>已暂停 · 按 P / Esc 继续</span>
             </div>
           ) : null}
           {state.phase === 'finished' ? (

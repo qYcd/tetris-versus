@@ -1,6 +1,6 @@
 {
   "name": "tetris-versus",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "双人对战俄罗斯方块（共享引擎 + WebSocket 服务端 + Electron 客户端）",
   "workspaces": [

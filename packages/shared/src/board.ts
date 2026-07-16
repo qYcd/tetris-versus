@@ -121,25 +121,20 @@ export function clearFullLines(board: Cell[][]): number {
 }
 
 /**
- * 锁定后的级联结算：
- * 1) 单格重力沉降空隙
- * 2) 消行
- * 3) 重复直到不再消行
+ * 锁定后的级联结算（与 C 引擎一致）：
+ * 仅当存在满行时才消行，随后列内下落；无满行不沉降。
  * 返回总消行数（可用于连锁计分）。
  */
 export function resolveCascade(board: Cell[][]): { lines: number; chain: number } {
   let totalLines = 0;
   let chain = 0;
-  // 先把锁定瞬间的空隙沉降
-  applyColumnGravity(board);
-
-  // 消行 + 再重力，直到稳定
   // 保护上限避免异常死循环
   for (let guard = 0; guard < 40; guard += 1) {
     const cleared = clearFullLines(board);
     if (cleared <= 0) break;
     totalLines += cleared;
     chain += 1;
+    // 仅消行后，上方格下落触底/被挡
     applyColumnGravity(board);
   }
   return { lines: totalLines, chain };

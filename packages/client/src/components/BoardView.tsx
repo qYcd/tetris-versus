@@ -2,7 +2,7 @@
  * 单个玩家棋盘与旁路信息展示。
  */
 
-import type { PlayerState } from '@tetris/shared';
+import type { PlayerState, PieceId } from '@tetris/shared';
 import { buildDisplayGrid, cellColor, previewMatrix } from '../game/renderBoard';
 
 interface Props {
@@ -15,9 +15,12 @@ interface Props {
  */
 export function BoardView({ player, isSelf }: Props) {
   const grid = buildDisplayGrid(player);
-  const next = player.nextQueue?.[0] ?? null;
-  const holdMat = previewMatrix(player.hold);
-  const nextMat = previewMatrix(next);
+  // 显示接下来 3 个预览块
+  const nextList: Array<PieceId | null> = [
+    player.nextQueue?.[0] ?? null,
+    player.nextQueue?.[1] ?? null,
+    player.nextQueue?.[2] ?? null,
+  ];
 
   return (
     <section className="panel player-card">
@@ -35,7 +38,7 @@ export function BoardView({ player, isSelf }: Props) {
         <div className="side-stack">
           <div>
             <h3>HOLD</h3>
-            <Mini matrix={holdMat} />
+            <Mini matrix={previewMatrix(player.hold)} />
           </div>
           <div className="meta">
             <div>
@@ -74,7 +77,11 @@ export function BoardView({ player, isSelf }: Props) {
         <div className="side-stack">
           <div>
             <h3>NEXT</h3>
-            <Mini matrix={nextMat} />
+            <div className="next-stack">
+              {nextList.map((piece, idx) => (
+                <Mini key={idx} matrix={previewMatrix(piece)} />
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -83,7 +90,7 @@ export function BoardView({ player, isSelf }: Props) {
 }
 
 /**
- * 小型 4x2 预览格。
+ * 小型预览格。
  */
 function Mini({ matrix }: { matrix: number[][] }) {
   return (

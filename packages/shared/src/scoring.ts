@@ -42,9 +42,23 @@ export function levelFromLines(totalLines: number): number {
 }
 
 /**
- * 根据等级返回重力间隔（逻辑 tick 数）。
- * level 1 ≈ 20 ticks * 50ms = 1s；随等级加快，下限 2 ticks。
+ * 活动块重力 G（格/60fps帧），与 C 引擎 te_gravity_g 一致：
+ * G = 1 / max(1, 16*(5 - floor(log2(l))) - l / 2^floor(log2(l)))
+ */
+export function gravityG(level: number): number {
+  const l = Math.max(1, Math.floor(level));
+  const fl = Math.floor(Math.log2(l));
+  const base = 2 ** fl;
+  const den = Math.max(1, 16 * (5 - fl) - l / base);
+  return 1 / den;
+}
+
+/**
+ * 兼容旧接口：将 G 映射为大约多少个 50ms tick 落 1 格。
+ * 新逻辑请优先使用 gravityG + 累计器。
  */
 export function gravityIntervalTicks(level: number): number {
-  return Math.max(2, 21 - level);
+  const g = gravityG(level);
+  // 每 tick 增加 g*3，约 1/(g*3) 个 tick 落一格
+  return Math.max(1, Math.round(1 / (g * 3)));
 }

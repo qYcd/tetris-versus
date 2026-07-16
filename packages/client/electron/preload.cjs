@@ -11,6 +11,6 @@ contextBridge.exposeInMainWorld('tetrisApp', {
     node: process.versions.node,
   },
   getBootstrap: async () => ipcRenderer.invoke('tetris:getBootstrap'),
-  startHost: async () => ipcRenderer.invoke('tetris:startHost'),
+  startHost: async (opts) => ipcRenderer.invoke('tetris:startHost', opts || {}),
   stopHost: async () => ipcRenderer.invoke('tetris:stopHost'),
 });

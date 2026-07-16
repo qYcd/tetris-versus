@@ -30,7 +30,7 @@ interface TetrisAppBridge {
     node?: string;
   };
   getBootstrap?: () => Promise<TetrisBootstrap>;
-  startHost?: () => Promise<TetrisBootstrap>;
+  startHost?: (opts?: { durationMs?: number }) => Promise<TetrisBootstrap>;
   stopHost?: () => Promise<TetrisBootstrap>;
 }
 

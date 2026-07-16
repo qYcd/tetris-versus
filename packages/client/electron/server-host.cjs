@@ -107,6 +107,9 @@ async function loadJsEngine() {
         ready(playerId) {
           match.handleMessage(playerId, { type: 'ready' });
         },
+        pause() {
+          match.pause();
+        },
         input(playerId, action, pressed) {
           match.handleMessage(playerId, { type: 'input', action, pressed });
         },
@@ -252,6 +255,15 @@ async function startEmbeddedServer(options = {}) {
       broadcastRoom(session.roomId);
       return;
     }
+    if (type === 'pause') {
+      if (typeof room.match.pause === 'function') {
+        room.match.pause();
+      } else if (typeof room.match.togglePause === 'function') {
+        room.match.togglePause();
+      }
+      broadcastRoom(session.roomId);
+      return;
+    }
     if (type === 'input') {
       room.match.input(session.enginePlayerId, payload.action, Boolean(payload.pressed));
       broadcastRoom(session.roomId);
@@ -265,7 +277,7 @@ async function startEmbeddedServer(options = {}) {
       const room = rooms.get(session.roomId);
       if (room) {
         const st = room.match.getState();
-        if (st?.phase === 'playing' && typeof room.match.forfeit === 'function') {
+        if ((st?.phase === 'playing' || st?.phase === 'paused') && typeof room.match.forfeit === 'function') {
           room.match.forfeit(session.enginePlayerId);
           broadcastRoom(session.roomId);
         }
@@ -318,6 +330,9 @@ async function startEmbeddedServer(options = {}) {
           break;
         case 'ready':
           handle(session, 'ready', null);
+          break;
+        case 'pause':
+          handle(session, 'pause', null);
           break;
         case 'input':
           handle(session, 'input', msg);

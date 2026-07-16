@@ -42,6 +42,8 @@ export class Match {
   private finishReason: FinishReason | null = null;
   private countdown = 3;
   private countdownAccMs = 0;
+  /** 已进行时长（暂停不计） */
+  private elapsedMs = 0;
 
   constructor(opts: MatchOptions) {
     this.roomId = opts.roomId;
@@ -99,9 +101,35 @@ export class Match {
       return;
     }
 
+    // 任一方可切换暂停，无次数上限
+    if (msg.type === 'pause') {
+      this.togglePause();
+      return;
+    }
+
     if (msg.type === 'input' && this.phase === 'playing') {
       seat.engine.handleInput(msg.action as InputAction, msg.pressed);
     }
+  }
+
+  /**
+   * 切换暂停/继续。
+   */
+  togglePause(): void {
+    if (this.phase === 'playing') {
+      this.phase = 'paused';
+      return;
+    }
+    if (this.phase === 'paused') {
+      this.phase = 'playing';
+    }
+  }
+
+  /**
+   * 供 C 引擎兼容层直接调用 pause。
+   */
+  pause(): void {
+    this.togglePause();
   }
 
   /**
@@ -117,15 +145,19 @@ export class Match {
         if (this.countdown <= 0) {
           this.phase = 'playing';
           this.startedAt = Date.now();
+          this.elapsedMs = 0;
         }
       }
       return;
     }
 
+    // 暂停：不推进时间与重力
+    if (this.phase === 'paused') return;
     if (this.phase !== 'playing') return;
 
-    // 时间到
-    if (this.startedAt && Date.now() - this.startedAt >= this.durationMs) {
+    // 时间到（暂停不计）
+    this.elapsedMs += Math.max(0, dtMs);
+    if (this.elapsedMs >= this.durationMs) {
       this.finishByTime();
       return;
     }
@@ -147,8 +179,8 @@ export class Match {
     }
 
     const remainingMs =
-      this.phase === 'playing' && this.startedAt
-        ? Math.max(0, this.durationMs - (Date.now() - this.startedAt))
+      this.phase === 'playing' || this.phase === 'paused'
+        ? Math.max(0, this.durationMs - this.elapsedMs)
         : this.phase === 'finished'
           ? 0
           : this.durationMs;
@@ -185,7 +217,7 @@ export class Match {
    * 主动认输。
    */
   forfeit(playerId: string): void {
-    if (this.phase !== 'playing') return;
+    if (this.phase !== 'playing' && this.phase !== 'paused') return;
     const other = this.order.find((id) => id !== playerId) ?? null;
     this.winnerId = other;
     this.finishReason = 'forfeit';

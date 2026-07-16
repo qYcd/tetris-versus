@@ -51,7 +51,7 @@ export interface PlayerState {
 }
 
 /** 对局阶段 */
-export type MatchPhase = 'waiting' | 'countdown' | 'playing' | 'finished';
+export type MatchPhase = 'waiting' | 'countdown' | 'playing' | 'paused' | 'finished';
 
 /** 对局结束原因 */
 export type FinishReason = 'opponent_topped_out' | 'time_up' | 'forfeit' | 'disconnect';
@@ -87,8 +87,9 @@ export type InputAction =
 
 /** 客户端 → 服务端消息 */
 export type ClientMessage =
-  | { type: 'join'; name: string; roomId?: string }
+  | { type: 'join'; name: string; roomId?: string; durationMinutes?: number }
   | { type: 'ready' }
+  | { type: 'pause' }
   | { type: 'input'; action: InputAction; pressed: boolean }
   | { type: 'ping'; t: number }
   | { type: 'leave' };

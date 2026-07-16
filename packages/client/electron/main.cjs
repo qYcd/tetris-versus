@@ -74,10 +74,18 @@ function createWindow() {
 /**
  * 按需启动内嵌服务端（房主模式）。
  */
-async function ensureHostServer() {
+/**
+ * 按需启动内嵌服务端（房主模式）。
+ * @param {{ durationMs?: number }} [opts]
+ */
+async function ensureHostServer(opts = {}) {
   if (embedded) return embedded;
   try {
-    embedded = await startEmbeddedServer({ port: DEFAULT_PORT, host: '0.0.0.0' });
+    embedded = await startEmbeddedServer({
+      port: DEFAULT_PORT,
+      host: '0.0.0.0',
+      durationMs: opts.durationMs,
+    });
     return embedded;
   } catch (err) {
     if (err && err.code === 'EADDRINUSE') {
@@ -120,8 +128,8 @@ function buildBootstrap() {
 
 ipcMain.handle('tetris:getBootstrap', async () => buildBootstrap());
 
-ipcMain.handle('tetris:startHost', async () => {
-  await ensureHostServer();
+ipcMain.handle('tetris:startHost', async (_evt, opts = {}) => {
+  await ensureHostServer({ durationMs: opts?.durationMs });
   return buildBootstrap();
 });
 

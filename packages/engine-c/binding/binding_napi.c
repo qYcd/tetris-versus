@@ -92,6 +92,18 @@ static napi_value Match_Ready(napi_env env, napi_callback_info info) {
   return undefined;
 }
 
+/** pause() toggle */
+static napi_value Match_Pause(napi_env env, napi_callback_info info) {
+  napi_value jsthis;
+  napi_value undefined;
+  napi_get_cb_info(env, info, NULL, NULL, &jsthis, NULL);
+  MatchWrap *w = get_wrap(env, jsthis);
+  napi_get_undefined(env, &undefined);
+  if (!w || !w->match) return undefined;
+  te_match_pause(w->match);
+  return undefined;
+}
+
 /** input(playerId, action, pressed) */
 static napi_value Match_Input(napi_env env, napi_callback_info info) {
   size_t argc = 3;
@@ -152,12 +164,7 @@ static napi_value Match_GetState(napi_env env, napi_callback_info info) {
   }
 
   te_match_get_state(w->match, &st);
-  if (st.phase == TE_PHASE_PLAYING && st.started_at_ms > 0) {
-    int64_t now = now_ms();
-    int rem = (int)(st.duration_ms - (now - st.started_at_ms));
-    if (rem < 0) rem = 0;
-    st.remaining_ms = rem;
-  }
+  /* remaining_ms 已由引擎按 elapsed（暂停不计）计算 */
 
   buf = (char *)malloc(256 * 1024);
   if (!buf) {
@@ -226,9 +233,9 @@ static napi_value CreateMatch(napi_env env, napi_callback_info info) {
   MatchWrap *w;
   napi_value obj;
   napi_value fn;
-  const char *ids[] = {"addPlayer", "ready", "input", "update", "getState", "forfeit", "destroy"};
+  const char *ids[] = {"addPlayer", "ready", "pause", "input", "update", "getState", "forfeit", "destroy"};
   napi_callback cbs[] = {
-      Match_AddPlayer, Match_Ready, Match_Input, Match_Update, Match_GetState, Match_Forfeit, Match_Destroy};
+      Match_AddPlayer, Match_Ready, Match_Pause, Match_Input, Match_Update, Match_GetState, Match_Forfeit, Match_Destroy};
 
   napi_get_cb_info(env, info, &argc, args, NULL, NULL);
   if (argc >= 1) {
@@ -257,7 +264,7 @@ static napi_value CreateMatch(napi_env env, napi_callback_info info) {
   napi_create_object(env, &obj);
   napi_wrap(env, obj, w, match_finalize, NULL, NULL);
 
-  for (int i = 0; i < 7; i++) {
+  for (int i = 0; i < 8; i++) {
     napi_create_function(env, ids[i], NAPI_AUTO_LENGTH, cbs[i], NULL, &fn);
     napi_set_named_property(env, obj, ids[i], fn);
   }

@@ -14,6 +14,8 @@ const require = createRequire(import.meta.url);
 interface CEngineMatch {
   addPlayer(name: string): string;
   ready(playerId: string): void;
+  /** 切换暂停/继续 */
+  pause(): void;
   input(playerId: string, action: string, pressed: boolean): void;
   update(dtMs: number): void;
   getState(): any;
@@ -97,7 +99,7 @@ export class RoomManager {
       const room = this.rooms.get(session.roomId);
       if (room) {
         const st = room.match.getState();
-        if (st?.phase === 'playing') {
+        if (st?.phase === 'playing' || st?.phase === 'paused') {
           room.match.forfeit(session.enginePlayerId);
           this.broadcastRoom(session.roomId);
         }
@@ -183,6 +185,12 @@ export class RoomManager {
 
     if (rawType === 'ready') {
       room.match.ready(session.enginePlayerId);
+      this.broadcastRoom(session.roomId);
+      return;
+    }
+
+    if (rawType === 'pause') {
+      room.match.pause();
       this.broadcastRoom(session.roomId);
       return;
     }

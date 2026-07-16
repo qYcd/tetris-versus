@@ -1,31 +1,31 @@
-# 双人对战俄罗斯方块 - 开发计划
+# 双人对战俄罗斯方块 - 0.1.1 更新计划
 
-## 硬约束
-- 俄罗斯方块**实现逻辑用 C 语言**（课设要求）
-- 网络双机联网保留
-- Electron/WebSocket 客户端与网络层可保留
+## 目标版本
+- v0.1.1
 
-## 架构
-- `packages/engine-c`：纯 C 权威规则引擎 + Node-API 绑定
-- `packages/server`：WebSocket 网络层（开发/独立调试）
-- `packages/client`：统一 Electron 应用（房主 / 加入 / 单人）
-- `packages/shared`：TS 协议类型与 JS 回退引擎
+## 需求
+- [x] 消行重力：未消行时锁定块不沉降；仅消行后上方格下落触底（C + JS 同步）
+- [x] 活动块重力：按图公式 G(l) @60fps，C 权威，JS 对齐
+- [x] 暂停功能（单人 + 对战，无次数/时长上限）
+- [x] 对局时长可自定义（分钟，1-60）
+- [x] NEXT 预览显示 3 个
+- [x] 版本升至 0.1.1
+- [x] 打包仅 mac.zip + win portable（脚本已收窄）
+- [x] 验证 typecheck / 冒烟
 
-## 任务
-- [x] C 引擎核心（7-bag / 旋转 / 单格重力级联 / 计分 / 对战状态机）
-- [x] Node-API 绑定并编译出 `tetris_engine.node`
-- [x] 服务端改为调用 C 引擎
-- [x] C 引擎冒烟测试
-- [x] 本机启动 server + 双连接联调
-- [x] 客户端 Vite 构建验证
-- [x] git 仓库初始化并首次提交
-- [x] 推送到 GitHub
-- [x] 统一应用：一个安装包内 房主/加入/单人
-- [x] 打包 macOS + Windows 统一安装包
-- [x] 更新 README（单包用法）
+## Spec
+- [x] 段1 现状分析
+- [x] 段2 功能点
+- [x] 段3 风险与决策（暂停无上限）
+- [x] HARD-GATE 后编码
 
 ## Review
-- 统一安装包输出：`packages/client/release/unified/`
-  - mac: dmg / zip (arm64)
-  - win: nsis / portable (x64)
-- 房主模式内嵌 `electron/server-host.cjs`，优先 C 引擎，失败回退 JS
+- cascade：`clear -> gravity` 循环，无满行不沉降（C `te_resolve_cascade` / JS `resolveCascade`）
+- 活动块：`gravity_acc += G*3` per 50ms tick；`te_gravity_g` / `gravityG`
+- 暂停：`phase=paused`，`te_match_pause` / `Match.pause` / 客户端 `P|Esc`
+- 时长：大厅分钟数 → `durationMs` → `startHost` / `SoloController`
+- NEXT：BoardView 显示 3 个
+- 验证：`npm run typecheck` 通过；C 引擎冒烟（pause remaining 不变、cascade、G 公式）通过；`build:client` 通过
+- 打包产物尚未在本轮执行 dist（脚本已改为只出 zip/portable）；需要时运行：
+  - `npm run dist:mac` → arm64-mac.zip
+  - `npm run dist:win` → portable.exe

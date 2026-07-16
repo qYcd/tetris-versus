@@ -1,10 +1,8 @@
 /**
- * 键盘控制：将按键映射为对战输入动作。
- * 说明：双人同屏时双方在各自客户端操作自己的盘面（联网对战），
- * 因此每个客户端只发送“本机玩家”输入。
+ * 键盘输入映射：支持长按软降与 DAS 简化处理。
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { InputAction } from '@tetris/shared';
 
 const KEY_MAP: Record<string, InputAction> = {
@@ -22,43 +20,66 @@ const KEY_MAP: Record<string, InputAction> = {
   KeyW: 'rotateCW',
 };
 
+export interface KeyboardPauseOptions {
+  enabledPause?: boolean;
+  onTogglePause?: () => void;
+}
+
 /**
- * 绑定全局键盘事件。
+ * 绑定窗口键盘事件到游戏输入。
+ * @param enabled 是否启用操作输入（playing）
+ * @param onInput 操作回调
+ * @param pauseOpts 暂停键（P / Esc），在 playing/paused 时可用
  */
 export function useKeyboard(
   enabled: boolean,
   onInput: (action: InputAction, pressed: boolean) => void,
+  pauseOpts?: KeyboardPauseOptions,
 ): void {
+  const onInputRef = useRef(onInput);
+  const pauseRef = useRef(pauseOpts);
+  onInputRef.current = onInput;
+  pauseRef.current = pauseOpts;
+
   useEffect(() => {
     if (!enabled) return;
-
     const down = new Set<string>();
 
-    const handleDown = (e: KeyboardEvent) => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      // 暂停切换
+      if (e.code === 'KeyP' || e.code === 'Escape') {
+        if (pauseRef.current?.enabledPause && pauseRef.current.onTogglePause) {
+          e.preventDefault();
+          if (!e.repeat) pauseRef.current.onTogglePause();
+        }
+        return;
+      }
+
       const action = KEY_MAP[e.code];
       if (!action) return;
       e.preventDefault();
-      if (down.has(e.code)) return; // 忽略系统长按重复，软降靠 pressed 状态
+      if (down.has(e.code)) return;
       down.add(e.code);
-      onInput(action, true);
+      onInputRef.current(action, true);
     };
 
-    const handleUp = (e: KeyboardEvent) => {
+    const onKeyUp = (e: KeyboardEvent) => {
       const action = KEY_MAP[e.code];
       if (!action) return;
-      e.preventDefault();
       down.delete(e.code);
       if (action === 'softDrop') {
-        onInput('softDrop', false);
-        onInput('softDropEnd', false);
+        onInputRef.current('softDrop', false);
+        onInputRef.current('softDropEnd', false);
+      } else {
+        onInputRef.current(action, false);
       }
     };
 
-    window.addEventListener('keydown', handleDown);
-    window.addEventListener('keyup', handleUp);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
     return () => {
-      window.removeEventListener('keydown', handleDown);
-      window.removeEventListener('keyup', handleUp);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
     };
-  }, [enabled, onInput]);
+  }, [enabled]);
 }

@@ -23,6 +23,7 @@ export interface UseGameSocketResult {
   error: string;
   connectAndJoin: (serverUrl: string, name: string, roomId?: string) => void;
   ready: () => void;
+  sendPause: () => void;
   sendInput: (action: InputAction, pressed: boolean) => void;
   disconnect: () => void;
 }
@@ -126,6 +127,13 @@ export function useGameSocket(): UseGameSocketResult {
   }, [send]);
 
   /**
+   * 发送暂停切换。
+   */
+  const sendPause = useCallback(() => {
+    send({ type: 'pause' });
+  }, [send]);
+
+  /**
    * 发送输入。
    */
   const sendInput = useCallback(
@@ -164,6 +172,7 @@ export function useGameSocket(): UseGameSocketResult {
       error,
       connectAndJoin,
       ready,
+      sendPause,
       sendInput,
       disconnect,
     }),
@@ -176,6 +185,7 @@ export function useGameSocket(): UseGameSocketResult {
       error,
       connectAndJoin,
       ready,
+      sendPause,
       sendInput,
       disconnect,
     ],

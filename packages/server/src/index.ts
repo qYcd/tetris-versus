@@ -46,6 +46,9 @@ wss.on('connection', (ws) => {
       case 'ready':
         manager.handle(session, 'ready', null);
         break;
+      case 'pause':
+        manager.handle(session, 'pause', null);
+        break;
       case 'input':
         manager.handle(session, 'input', msg);
         break;

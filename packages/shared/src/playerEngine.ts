@@ -13,7 +13,7 @@ import {
 import { getAbsoluteCells, getKickTests, PIECE_COLOR } from './pieces.js';
 import { deriveSeed } from './rng.js';
 import {
-  gravityIntervalTicks,
+  gravityG,
   levelFromLines,
   scoreForLines,
   scoreHardDrop,
@@ -45,7 +45,7 @@ export class PlayerEngine {
   name: string;
   private bag: SevenBag;
   private state: PlayerState;
-  private gravityCounter = 0;
+  private gravityAcc = 0;
   /** 水平/旋转等输入后重置锁延 */
   private lockResetBudget = 15;
 
@@ -119,27 +119,36 @@ export class PlayerEngine {
   /**
    * 固定逻辑帧推进（默认 50ms 一次）。
    */
+  /**
+   * 固定逻辑帧推进（默认 50ms 一次，≈3 个 60fps 帧）。
+   */
   tick(): void {
     if (!this.state.alive || !this.state.active) return;
 
-    const interval = this.state.softDropping
-      ? 1
-      : gravityIntervalTicks(this.state.level);
+    const g = gravityG(this.state.level);
+    this.gravityAcc += g * 3;
+    // 软降：本 tick 至少尝试下落 1 格
+    if (this.state.softDropping && this.gravityAcc < 1) {
+      this.gravityAcc = 1;
+    }
 
-    this.gravityCounter += 1;
-    if (this.gravityCounter >= interval) {
-      this.gravityCounter = 0;
+    let steps = 0;
+    while (this.gravityAcc >= 1 && steps < 40) {
+      this.gravityAcc -= 1;
+      steps += 1;
       const moved = this.tryMove(0, 1);
-      if (moved && this.state.softDropping) {
-        this.state.score += scoreSoftDrop(1);
-      }
-      if (!moved) {
+      if (moved) {
+        if (this.state.softDropping) {
+          this.state.score += scoreSoftDrop(1);
+        }
+        this.state.lockTicks = 0;
+      } else {
+        if (this.gravityAcc > 1) this.gravityAcc = 0;
         this.state.lockTicks += 1;
         if (this.state.lockTicks >= LOCK_DELAY_TICKS) {
           this.lockActive();
         }
-      } else {
-        this.state.lockTicks = 0;
+        break;
       }
     }
   }
@@ -189,7 +198,7 @@ export class PlayerEngine {
     this.state.holdUsed = false;
     this.state.lockTicks = 0;
     this.state.moveResets = 0;
-    this.gravityCounter = 0;
+    this.gravityAcc = 0;
     this.lockResetBudget = 15;
   }
 

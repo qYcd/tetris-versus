@@ -1,6 +1,6 @@
 {
   "name": "@tetris/client",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "main": "electron/main.cjs",
   "type": "module",
@@ -26,7 +26,7 @@
     "dist:apps:all": "npm run dist:apps:mac && npm run dist:apps:win"
   },
   "dependencies": {
-    "@tetris/shared": "0.1.0",
+    "@tetris/shared": "0.1.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "ws": "^8.21.1"
@@ -60,7 +60,6 @@
     },
     "mac": {
       "target": [
-        "dmg",
         "zip"
       ],
       "category": "public.app-category.games",
@@ -68,18 +67,7 @@
     },
     "win": {
       "target": [
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
+        "portable"
       ],
       "artifactName": "${productName}-${version}-win-${arch}.${ext}"
     },

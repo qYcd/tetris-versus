@@ -14,9 +14,9 @@ interface Props {
   error: string;
   bootstrap?: TetrisBootstrap | null;
   onRefreshBootstrap?: () => Promise<void> | void;
-  onStartHost: (name: string, roomId?: string) => Promise<void> | void;
+  onStartHost: (name: string, roomId?: string, durationMinutes?: number) => Promise<void> | void;
   onJoin: (serverUrl: string, name: string, roomId?: string) => void;
-  onSolo: (name: string) => void;
+  onSolo: (name: string, durationMinutes?: number) => void;
 }
 
 /**
@@ -35,6 +35,8 @@ export function Lobby({
   const [name, setName] = useState(() => `玩家${Math.floor(Math.random() * 90 + 10)}`);
   const [serverUrl, setServerUrl] = useState('ws://192.168.1.8:8787');
   const [roomId, setRoomId] = useState('');
+  /** 对局时长（分钟），1-60 */
+  const [durationMinutes, setDurationMinutes] = useState(10);
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState('');
 
@@ -47,12 +49,20 @@ export function Lobby({
 
   const canSubmit = useMemo(() => name.trim().length > 0, [name]);
 
+  /**
+   * 规范化时长分钟。
+   */
+  function clampMinutes(v: number): number {
+    if (!Number.isFinite(v)) return 10;
+    return Math.min(60, Math.max(1, Math.floor(v)));
+  }
+
   async function handleHost() {
     if (!canSubmit || busy) return;
     setBusy(true);
     setLocalError('');
     try {
-      await onStartHost(name.trim(), roomId.trim() || undefined);
+      await onStartHost(name.trim(), roomId.trim() || undefined, clampMinutes(durationMinutes));
     } catch (e) {
       setLocalError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -71,6 +81,16 @@ export function Lobby({
             <span>昵称</span>
             <input value={name} maxLength={16} onChange={(e) => setName(e.target.value)} />
           </label>
+          <label className="form-row">
+            <span>时长（分钟）</span>
+            <input
+              type="number"
+              min={1}
+              max={60}
+              value={durationMinutes}
+              onChange={(e) => setDurationMinutes(clampMinutes(Number(e.target.value)))}
+            />
+          </label>
           <div className="form-actions" style={{ display: 'grid', gap: 10 }}>
             <button className="primary" disabled={!canSubmit} onClick={() => setMode('host')}>
               当房主开房（双人对战）
@@ -78,7 +98,7 @@ export function Lobby({
             <button disabled={!canSubmit} onClick={() => setMode('join')}>
               加入房间
             </button>
-            <button disabled={!canSubmit} onClick={() => onSolo(name.trim())}>
+            <button disabled={!canSubmit} onClick={() => onSolo(name.trim(), clampMinutes(durationMinutes))}>
               单人练习
             </button>
           </div>
@@ -120,6 +140,16 @@ export function Lobby({
               value={roomId}
               onChange={(e) => setRoomId(e.target.value.toUpperCase())}
               placeholder="例如 AB12CD"
+            />
+          </label>
+          <label className="form-row">
+            <span>时长（分钟）</span>
+            <input
+              type="number"
+              min={1}
+              max={60}
+              value={durationMinutes}
+              onChange={(e) => setDurationMinutes(clampMinutes(Number(e.target.value)))}
             />
           </label>
           <div className="form-actions">

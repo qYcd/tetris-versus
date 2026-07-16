@@ -9,6 +9,8 @@ export interface EngineMatch {
   addPlayer(name: string): string;
   /** 标记玩家就绪 */
   ready(playerId: string): void;
+  /** 切换暂停/继续（无上限） */
+  pause(): void;
   /** 发送输入动作 */
   input(playerId: string, action: string, pressed: boolean): void;
   /** 推进 dt 毫秒逻辑 */

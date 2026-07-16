@@ -47,6 +47,11 @@ export function App() {
   const playing =
     (runtime === 'online' && socket.state?.phase === 'playing') ||
     (runtime === 'solo' && soloState?.phase === 'playing');
+  const canPause =
+    (runtime === 'online' &&
+      (socket.state?.phase === 'playing' || socket.state?.phase === 'paused')) ||
+    (runtime === 'solo' &&
+      (soloState?.phase === 'playing' || soloState?.phase === 'paused'));
 
   const onInput = useCallback(
     (action: InputAction, pressed: boolean) => {
@@ -54,25 +59,44 @@ export function App() {
         soloRef.current?.input(action, pressed);
         return;
       }
+      // 暂停中不转发操作输入
+      if (socket.state?.phase === 'paused') return;
       socket.sendInput(action, pressed);
     },
     [runtime, socket],
   );
 
-  useKeyboard(Boolean(playing), onInput);
+  /**
+   * 切换暂停（单人本地 / 联网发 pause 消息）。
+   */
+  const onTogglePause = useCallback(() => {
+    if (runtime === 'solo') {
+      soloRef.current?.togglePause();
+      return;
+    }
+    socket.sendPause();
+  }, [runtime, socket]);
+
+  // 游戏中与暂停中都监听键盘：操作仅 playing，暂停键在 canPause 时生效
+  useKeyboard(Boolean(playing || canPause), onInput, {
+    enabledPause: Boolean(canPause),
+    onTogglePause,
+  });
 
   const platform = useMemo(() => {
     return bootstrap?.platform || window.tetrisApp?.platform || navigator.platform || 'web';
   }, [bootstrap]);
 
-  async function startHost(name: string, roomId?: string) {
+  async function startHost(name: string, roomId?: string, durationMinutes = 10) {
+    const minutes = Math.min(60, Math.max(1, Math.floor(durationMinutes || 10)));
+    const durationMs = minutes * 60 * 1000;
     if (!window.tetrisApp?.startHost) {
       // 网页调试回退：假定本机已有服务
       socket.connectAndJoin('ws://127.0.0.1:8787', name, roomId);
       setRuntime('online');
       return;
     }
-    const info = await window.tetrisApp.startHost();
+    const info = await window.tetrisApp.startHost({ durationMs });
     setBootstrap(info);
     const wsUrl = info.host.localWs || 'ws://127.0.0.1:8787';
     // 稍等服务起来
@@ -81,10 +105,12 @@ export function App() {
     setRuntime('online');
   }
 
-  function startSolo(name: string) {
+  function startSolo(name: string, durationMinutes = 10) {
+    const minutes = Math.min(60, Math.max(1, Math.floor(durationMinutes || 10)));
     soloRef.current?.stop();
     const ctrl = new SoloController({
       name,
+      durationMs: minutes * 60 * 1000,
       onState: setSoloState,
     });
     soloRef.current = ctrl;

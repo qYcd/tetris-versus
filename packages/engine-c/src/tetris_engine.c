@@ -1,7 +1,8 @@
 /**
  * tetris_engine.c
  * 双人对战俄罗斯方块权威逻辑（纯 C）。
- * 说明：活动方块整体操作；锁定后固定格按列单格重力填补空隙。
+ * 说明：活动方块整体操作；锁定后仅消行才触发上方格列重力。
+ * 活动块重力按 60fps 语义的 log2 曲线累计。
  */
 
 #include "tetris_engine.h"
@@ -22,7 +23,7 @@ typedef struct {
   int bag_count;
   int queue[32];
   int queue_len;
-  int gravity_counter;
+  double gravity_acc; /* 活动块重力累计（格） */
   int lock_reset_budget;
   int ready;
   uint32_t rng_state;
@@ -35,6 +36,7 @@ struct TeMatch {
   int player_count;
   int64_t started_at_ms;
   int duration_ms;
+  int elapsed_ms; /* 已进行时长（暂停不计） */
   char winner_id[32];
   TeFinishReason finish_reason;
   int countdown;
@@ -249,21 +251,21 @@ static int te_clear_full_lines(int board[TE_TOTAL_ROWS][TE_BOARD_W]) {
 }
 
 /**
- * 锁定后级联：
- * 重力 -> 消行 -> 重力 -> ... 直到不再消行
+ * 锁定后级联（定制规则）：
+ * 仅当存在满行时才消行，随后对剩余固定格做列内下落；
+ * 无满行时不发生任何沉降。
  */
 static void te_resolve_cascade(int board[TE_TOTAL_ROWS][TE_BOARD_W], int *out_lines, int *out_chain) {
   int total_lines = 0;
   int chain = 0;
   int guard;
 
-  te_apply_column_gravity(board);
-
   for (guard = 0; guard < 40; guard++) {
     int cleared = te_clear_full_lines(board);
     if (cleared <= 0) break;
     total_lines += cleared;
     chain++;
+    /* 仅消行后，上方格按列下落触底/被挡 */
     te_apply_column_gravity(board);
   }
 
@@ -295,11 +297,26 @@ static int te_level_from_lines(int total_lines) {
   return total_lines / 10 + 1;
 }
 
-/** 等级越高重力越快，返回需要累计的逻辑帧数 */
-static int te_gravity_interval(int level) {
-  int v = 21 - level;
-  if (v < 2) v = 2;
-  return v;
+/**
+ * 活动块重力 G（格/60fps帧）：
+ * G = 1 / max(1, 16*(5 - floor(log2(l))) - l / 2^floor(log2(l)))
+ */
+static double te_gravity_g(int level) {
+  int l = level < 1 ? 1 : level;
+  int fl = 0;
+  int tmp = l;
+  double den;
+  double frac;
+  int base;
+  while (tmp > 1) {
+    tmp >>= 1;
+    fl++;
+  }
+  base = 1 << fl;
+  frac = (double)l / (double)base;
+  den = 16.0 * (5.0 - (double)fl) - frac;
+  if (den < 1.0) den = 1.0;
+  return 1.0 / den;
 }
 
 /* =========================
@@ -383,7 +400,7 @@ static void te_spawn(TePlayerInternal *p, int forced) {
 
   p->state.hold_used = 0;
   p->state.lock_ticks = 0;
-  p->gravity_counter = 0;
+  p->gravity_acc = 0.0;
   p->lock_reset_budget = 15;
 }
 
@@ -507,23 +524,37 @@ static void te_lock_active(TePlayerInternal *p) {
   te_spawn(p, -1);
 }
 
-/** 单逻辑帧（约 50ms） */
+/**
+ * 单逻辑帧（约 50ms ≈ 3 个 60fps 帧）。
+ * 将 G 累计到 gravity_acc，达到 1 格则下落。
+ */
 static void te_player_tick(TePlayerInternal *p) {
-  int interval;
+  double g;
+  int steps;
   if (!p->state.alive || !p->state.active.valid) return;
 
-  interval = p->state.soft_dropping ? 1 : te_gravity_interval(p->state.level);
-  p->gravity_counter++;
-  if (p->gravity_counter < interval) return;
-  p->gravity_counter = 0;
+  g = te_gravity_g(p->state.level);
+  /* 50ms tick * 60fps = 3 帧当量 */
+  p->gravity_acc += g * 3.0;
+  /* 软降：本 tick 至少尝试下落 1 格 */
+  if (p->state.soft_dropping && p->gravity_acc < 1.0) {
+    p->gravity_acc = 1.0;
+  }
 
-  if (te_try_move(p, 0, 1)) {
-    if (p->state.soft_dropping) p->state.score += 1;
-    p->state.lock_ticks = 0;
-  } else {
-    p->state.lock_ticks++;
-    if (p->state.lock_ticks >= TE_LOCK_DELAY_TICKS) {
-      te_lock_active(p);
+  steps = 0;
+  while (p->gravity_acc >= 1.0 && steps < 40) {
+    p->gravity_acc -= 1.0;
+    steps++;
+    if (te_try_move(p, 0, 1)) {
+      if (p->state.soft_dropping) p->state.score += 1;
+      p->state.lock_ticks = 0;
+    } else {
+      if (p->gravity_acc > 1.0) p->gravity_acc = 0.0;
+      p->state.lock_ticks++;
+      if (p->state.lock_ticks >= TE_LOCK_DELAY_TICKS) {
+        te_lock_active(p);
+      }
+      break;
     }
   }
 }
@@ -616,6 +647,7 @@ TeMatch *te_match_create(const char *room_id, int duration_ms, uint32_t seed) {
   te_copy_str(m->room_id, sizeof(m->room_id), room_id ? room_id : "ROOM");
   m->phase = TE_PHASE_WAITING;
   m->duration_ms = duration_ms > 0 ? duration_ms : TE_DEFAULT_DURATION_MS;
+  m->elapsed_ms = 0;
   m->seed = seed ? seed : (uint32_t)time(NULL) ^ 0xC0FFEEu;
   m->countdown = 3;
   return m;
@@ -661,6 +693,20 @@ void te_match_ready(TeMatch *match, const char *player_id) {
   }
 }
 
+/**
+ * 切换暂停/继续，无次数上限。
+ */
+void te_match_pause(TeMatch *match) {
+  if (!match) return;
+  if (match->phase == TE_PHASE_PLAYING) {
+    match->phase = TE_PHASE_PAUSED;
+    return;
+  }
+  if (match->phase == TE_PHASE_PAUSED) {
+    match->phase = TE_PHASE_PLAYING;
+  }
+}
+
 void te_match_input(TeMatch *match, const char *player_id, TeInputAction action, int pressed) {
   TePlayerInternal *p;
   if (!match || match->phase != TE_PHASE_PLAYING) return;
@@ -684,16 +730,20 @@ void te_match_update(TeMatch *match, int64_t now_ms, int dt_ms) {
       if (match->countdown <= 0) {
         match->phase = TE_PHASE_PLAYING;
         match->started_at_ms = now_ms;
+        match->elapsed_ms = 0;
         match->logic_acc_ms = 0;
       }
     }
     return;
   }
 
+  /* 暂停：不推进时间与重力 */
+  if (match->phase == TE_PHASE_PAUSED) return;
   if (match->phase != TE_PHASE_PLAYING) return;
 
-  /* 限时 */
-  if (match->started_at_ms > 0 && now_ms - match->started_at_ms >= match->duration_ms) {
+  /* 限时（累计已进行时长，暂停不计） */
+  match->elapsed_ms += dt_ms;
+  if (match->elapsed_ms >= match->duration_ms) {
     te_finish_by_score(match, TE_FINISH_TIMEUP);
     return;
   }
@@ -729,8 +779,8 @@ void te_match_get_state(const TeMatch *match, TeMatchState *out) {
     out->players[i] = match->players[i].state;
   }
 
-  if (match->phase == TE_PHASE_PLAYING && match->started_at_ms > 0) {
-    rem = (int)(match->duration_ms - (match->last_now_ms - match->started_at_ms));
+  if (match->phase == TE_PHASE_PLAYING || match->phase == TE_PHASE_PAUSED) {
+    rem = match->duration_ms - match->elapsed_ms;
     if (rem < 0) rem = 0;
     out->remaining_ms = rem;
   } else if (match->phase == TE_PHASE_FINISHED) {
@@ -742,7 +792,7 @@ void te_match_get_state(const TeMatch *match, TeMatchState *out) {
 
 void te_match_forfeit(TeMatch *match, const char *player_id) {
   int i;
-  if (!match || match->phase != TE_PHASE_PLAYING) return;
+  if (!match || (match->phase != TE_PHASE_PLAYING && match->phase != TE_PHASE_PAUSED)) return;
   match->winner_id[0] = '\0';
   for (i = 0; i < match->player_count; i++) {
     if (!te_id_eq(match->players[i].state.id, player_id)) {
@@ -755,7 +805,7 @@ void te_match_forfeit(TeMatch *match, const char *player_id) {
 }
 
 const char *te_engine_version(void) {
-  return "tetris-engine-c/0.1.0";
+  return "tetris-engine-c/0.1.1";
 }
 
 int te_parse_action(const char *name) {
@@ -780,6 +830,7 @@ static const char *te_phase_str(TeMatchPhase p) {
     case TE_PHASE_WAITING: return "waiting";
     case TE_PHASE_COUNTDOWN: return "countdown";
     case TE_PHASE_PLAYING: return "playing";
+    case TE_PHASE_PAUSED: return "paused";
     case TE_PHASE_FINISHED: return "finished";
     default: return "waiting";
   }

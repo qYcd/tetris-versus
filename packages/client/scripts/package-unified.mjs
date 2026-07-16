@@ -40,8 +40,8 @@ run('npm', ['run', 'build', '-w', '@tetris/client']);
 const electronBuilder = path.join(repoRoot, 'node_modules', '.bin', 'electron-builder');
 const args =
   platform === 'mac'
-    ? ['--mac', 'dmg', 'zip']
-    : ['--win', 'portable', 'nsis', '--x64'];
+    ? ['--mac', 'zip']
+    : ['--win', 'portable', '--x64'];
 
 const env = {
   ...process.env,
